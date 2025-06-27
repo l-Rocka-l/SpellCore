@@ -2,11 +2,6 @@
 ---@class SpellAPI
 local spellapi = {}
 
--- local spellbook = nil
--- for _, fileName in ipairs(listFiles('/')) do
--- 	if fileName == 'SpellBook' then spellbook = require(fileName) end
--- end
-
 spellapi.projectiles = {} -- Contains all projectiles
 local playerUUID = {}
 local ticks = {}
@@ -63,49 +58,14 @@ local function getLastPos(entity)
 	local pos = entity:getPos()
 	local pos2 = pos:copy():add(entity:getVelocity():mul(3,3,3))
 	local block, hitPos = raycast:block(pos, pos2)
-	-- setTimer(1000, function ()
-	-- 	particles:newParticle("dust 1 1 1 1", hitPos)
-	-- end)
 	return hitPos, block
 end
--- local function is_potion_affected(entity, potion_entity)
--- 	local potion_contents = potion_entity:getNbt().Item.components['minecraft:potion_contents']
--- 	if potion_contents.custom_effects then
--- 		potion_contents = potion_contents.custom_effects
--- 		for _, effect in pairs(potion_contents) do
--- 			local In = false
--- 			for _, active_effect in pairs(entity:getNbt().active_effects) do
--- 				if active_effect.id == effect.id then
--- 					In = true
--- 					break
--- 				end
--- 			end
--- 			if not In then
--- 				return false
--- 			end
--- 		end
--- 		return true
--- 	else
--- 		local effectId = string.gsub(string.gsub(potion_contents.potion, 'long_', ''), 'strong_', '') 
--- 		for _, active_effect in pairs(entity:getNbt().active_effects) do
--- 			if active_effect.id == effectId then
--- 				return true
--- 			end
--- 		end
--- 		return false
--- 	end
--- end
 
 ------------------------------- GET ENTITY HIT BY PROJECTILE --------------------------
 
 local function raycastEntity(projectile, multiplier)
 	multiplier = multiplier or 2.5
 	local box = projectile.entity:getBoundingBox():add(0.3,0.3,0.3):div(2,2,2)
---db
-	-- setTimer(1000, function ()
-	-- 	particles:newParticle("dust 0 1 1 1", projectile.entity:getPos())
-	-- end)
-
 	local startPos = projectile.entity:getPos():copy()
 	local vel = projectile.entity:getVelocity():sub(0, 0.15, 0)
 
@@ -120,11 +80,6 @@ local function raycastEntity(projectile, multiplier)
 
 	for i = 1, 9 do
 		local endPos = startPos:copy():add(vel)
---db
-		-- setTimer(1000, function ()
-		-- 	particles:newParticle("dust 1 0 1 1", endPos)
-		-- end)
-
 		local entityHit, hitPos = raycast:entity(startPos, endPos, function(x)  -- x is the entity hit by the raycast
 			return not(x:getType() == projectile.entity:getType() or --[[x:getNbt().HasBeenShot or]] x:getType() == projectile.exception)         -- if the entity hit is the player or projectile don't include the player or projectile in the results
 		end)
@@ -146,8 +101,8 @@ local function raycastEntity(projectile, multiplier)
 	end
 end
 
-------------------------------- GET ENTITIES AFFECTED/HITTED BY PROJECTILE ------------
----
+------------------------------- GET ENTITIES AFFECTED/HIT BY PROJECTILE ---------------
+
 local function cloudAffected(cloud)
     local bb = cloud.entity:getBoundingBox():div(2, 2, 2)
 	local entities = {}
@@ -159,7 +114,7 @@ local function cloudAffected(cloud)
 	return entities
 end
 local function explosionAffected(projectile, radius)
-	radius = radius or explosionsRadius[projectile.entity:getType()]--[[ or 4.125]]
+	radius = radius or explosionsRadius[projectile.entity:getType()]
 	local entities = {}
 	for _, entity in pairs(world.getEntities(projectile.lastPos:copy():sub(radius), projectile.lastPos:copy():add(radius))) do
 		if (entity:getPos() - projectile.lastPos):length() <= radius[1] then
@@ -248,11 +203,6 @@ end
 local function excl_splash(projectile)
 	if projectile.justGotStuck then
 		projectile.affectedEntities = explosionAffected(projectile)
-		-- for _, entity in pairs(explosionAffected(projectile)) do
-		-- 	if is_potion_affected(entity, projectile.entity) then
-		-- 		projectile.affectedEntities[entity:getUUID()] = entity
-		-- 	end
-		-- end
 	end
 end
 local function changeToCloud(projectile)
@@ -272,11 +222,9 @@ local function excl_lingering(projectile)
 	end
 	if projectile.isStuck then
 		for _, entity in ipairs(cloudAffected(projectile)) do
-			-- if is_potion_affected(entity, projectile.entity) then
 			if entity:getType() ~= 'minecraft:area_effect_cloud' then
 				projectile.affectedEntities[entity:getUUID()] = entity				
 			end
-			-- end
 		end
 	end
 end
