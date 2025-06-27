@@ -39,3 +39,7 @@ luac.out
 *.x86_64
 *.hex
 
+# VSCode and other
+.vscode/
+*.code-workspace
+*.json
