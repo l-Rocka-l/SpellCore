@@ -224,66 +224,14 @@ local function excl_trident(data) -- WIP
 
 	excl_arrow(data)
 
-	-- -- local norm = data.entity:getVelocity():normalized()
-	-- -- local prevnorm = (data.prevVelocity or vec(0,0,0)):normalized()
-
-	-- -- if not(data.isNew or data.isStuck) and 
-	-- -- (norm.x * prevnorm.x <= 0) and
-	-- -- (norm.z * prevnorm.z <= 0) then
-	-- -- 	local entity  = raycastEntity(data, -2)
-	-- -- 	data.hitEntity = entity
-	-- -- 	data.inEntity = true
-	-- -- 	data.justGotStuck = true
-	-- -- 	data.isStuck = true
-	-- -- end
-
-	-- -- data.prevVelocity = data.entity:getVelocity()
-	-- local rot = data.entity:getRot()
-	-- local prevRot = (data.prevRot or rot)
-	-- log(rot, math.abs(rot.y-prevRot.y), data.isStuck, data.entity:getNbt().inGround == 1, data.entity:isLoaded())
-	-- if not(data.isStuck) and (math.abs(rot.y-prevRot.y) >= 130) then
-	-- 	log('DDDDDDDDD')
-
-	-- 	-- local entity  = raycastEntity(data)
-	-- 	local vel = data.entity:getVelocity()
-	-- 	local pos = data.entity:getPos()
-	-- 	local bb = data.entity:getBoundingBox() / 2
-	-- 	local pos1, pos2 = expandZone(pos - vel, pos + vel, bb)
-	-- 	local entity = nil
-	-- 	log(pos1, pos2)
-	-- 	spellcore.setTimer(30, function () particles:newParticle("dust 1 0 1 1", pos1) end)
-	-- 	spellcore.setTimer(30, function () particles:newParticle("dust 0 1 1 1", pos2) end)
-	-- 	for _, e in ipairs(world.getEntities(pos1, pos2)) do
-	-- 		log(e)
-	-- 		if e:getNbt().HurtTime then
-	-- 			log(e:getNbt().HurtTime)
-	-- 		end
-	-- 		if e:getNbt().HurtTime and ((e:getNbt().HurtTime >= 9) or (e:getNbt().DeathTime > 0)) then
-	-- 			-- data.affectedEntities[e:getUUID()] = e
-	-- 			entity = e
-	-- 			break
-	-- 		end
-	-- 	end
-
-	-- 	if entity then
-	-- 		data.hitEntity = entity
-	-- 		data.inEntity = true
-	-- 		data.justGotStuck = true
-	-- 		data.isStuck = true
-	-- 	end
-	-- end
-	-- data.prevRot = rot
 	if not data.isStuck or data.justGotStuck then
 		local hitEntity = nil
 		local vel = data.entity:getVelocity()
 		local pos = data.entity:getPos()
 		local bb = data.entity:getBoundingBox() / 2
 		local pos1, pos2 = expandZone(pos, pos - vel, bb)
-		-- spellcore.setTimer(90, function () particles:newParticle("dust 1 0 1 1", pos1) end)
-		-- spellcore.setTimer(90, function () particles:newParticle("dust 0 1 1 1", pos2) end)
 		for _, entity in ipairs(world.getEntities(pos1, pos2)) do
 			if entity:getNbt().HurtTime and ((entity:getNbt().HurtTime >= 9) or (entity:getNbt().DeathTime > 0)) then
-				-- data.affectedEntities[entity:getUUID()] = entity
 				hitEntity = entity
 				break
 			end
@@ -380,9 +328,9 @@ function spellcore:newSpell(spellName, conditions, projectile_init, projectile_i
 		projectile_stuck = projectile_stuck,
 		projectile_disappeared = projectile_disappeared,
 		render = render,
-		tick = tick
+		tick = tick,
 	}
-	-- spell.__index = spell
+	spell.__index = spell
 
 	function spell:newProjectile(entity)
 		local projectile = setmetatable({}, {__index = double_inheritance})
@@ -394,11 +342,9 @@ function spellcore:newSpell(spellName, conditions, projectile_init, projectile_i
 			isNew = true,
 			exists = true,
 			hitEntity = nil,
-			-- affectedEntities = {},
-			-- affectedTimePoints = {},
 			lastPos = nil
 		}
-		local data = setmetatable(projectile.__data, {__index = spell})
+		local data = setmetatable(projectile.__data, spell)
 
 		-- Determining projectile type and behavior scenario --
 		data.excl_else = projectile_else
@@ -445,8 +391,6 @@ function spellcore:newSpell(spellName, conditions, projectile_init, projectile_i
 	return spell
 end
 
--- local noSpell = spellcore:newSpell('NoSpell')
--- spellcore.spells.NoSpell = nil
 local NoSpell = {spellName = 'NoSpell'}
 NoSpell.__index = NoSpell
 function NoSpell:newProjectile(entity)
