@@ -307,6 +307,65 @@ end
 
 spellcore.spells = {} -- Contains all spells
 
+local Spell = {}
+Spell.__index = Spell
+
+Spell.conditions = function () return false end
+
+function Spell:newProjectile(entity)
+	local projectile = setmetatable({}, {__index = double_inheritance})
+	projectile.__data = {
+		entity = entity,
+		justGotStuck = false,
+		isStuck = false,
+		inEntity = false,
+		isNew = true,
+		exists = true,
+		hitEntity = nil,
+		lastPos = nil
+	}
+	local data = setmetatable(projectile.__data, self)
+
+	-- Determining projectile type and behavior scenario --
+	data.excl_else = projectile_else
+	data.excl = function() end
+	if entity:getType():find('arrow') then
+		data.excl_else = arrow_else
+		if entity:getNbt().PierceLevel == 0 then
+			data.excl = excl_arrow
+		else
+			data.excl = excl_pierce
+			data.affectedEntities = {}
+			data.affectedTimePoints = {}
+		end
+
+	elseif entity:getType() == 'minecraft:trident' then
+		data.excl_else = arrow_else
+		data.excl = excl_trident
+
+	elseif entity:getType() == 'minecraft:potion' then
+		local id = entity:getNbt().Item.id
+		if id == 'minecraft:splash_potion' then
+			data.excl = excl_splash
+			data.affectedEntities = {}
+		elseif id == 'minecraft:lingering_potion' then
+			data.excl = excl_lingering
+			data.affectedEntities = {}
+			data.affectedTimePoints = {}
+		end
+
+	elseif entity:getType() == 'minecraft:firework_rocket'
+	or entity:getType() == 'minecraft:fireball'
+	or entity:getType() == 'minecraft:wind_charge' then
+		data.excl = excl_explosive
+		data.affectedEntities = {}
+	end
+
+	return projectile
+end
+
+
+
 ---Create your own new spell!
 ---All functions have projectile object (`self`) as first argument
 ---@param spellName string|nil Name your spell. For example "Lumus", "Zoltraak" or "EXPLOSION" or leave it empty, it doesn't really matter.
@@ -320,69 +379,17 @@ spellcore.spells = {} -- Contains all spells
 ---@return table
 function spellcore:newSpell(spellName, conditions, projectile_init, projectile_in_air, projectile_stuck, projectile_disappeared, render, tick)
 	if type(conditions) == 'string' then conditions = load('local entity = ... return '..conditions) end
-	local spell = {
+	local spell = setmetatable({
 		spellName = spellName,
-		conditions = conditions or function () return false end,
+		conditions = conditions,
 		projectile_init = projectile_init,
 		projectile_in_air = projectile_in_air,
 		projectile_stuck = projectile_stuck,
 		projectile_disappeared = projectile_disappeared,
 		render = render,
-		tick = tick,
-	}
+		tick = tick
+	}, Spell)
 	spell.__index = spell
-
-	function spell:newProjectile(entity)
-		local projectile = setmetatable({}, {__index = double_inheritance})
-		projectile.__data = {
-			entity = entity,
-			justGotStuck = false,
-			isStuck = false,
-			inEntity = false,
-			isNew = true,
-			exists = true,
-			hitEntity = nil,
-			lastPos = nil
-		}
-		local data = setmetatable(projectile.__data, spell)
-
-		-- Determining projectile type and behavior scenario --
-		data.excl_else = projectile_else
-		data.excl = function() end
-		if entity:getType():find('arrow') then
-			data.excl_else = arrow_else
-			if entity:getNbt().PierceLevel == 0 then
-				data.excl = excl_arrow
-			else
-				data.excl = excl_pierce
-				data.affectedEntities = {}
-				data.affectedTimePoints = {}
-			end
-
-		elseif entity:getType() == 'minecraft:trident' then
-			data.excl_else = arrow_else
-			data.excl = excl_trident
-
-		elseif entity:getType() == 'minecraft:potion' then
-			local id = entity:getNbt().Item.id
-			if id == 'minecraft:splash_potion' then
-				data.excl = excl_splash
-				data.affectedEntities = {}
-			elseif id == 'minecraft:lingering_potion' then
-				data.excl = excl_lingering
-				data.affectedEntities = {}
-				data.affectedTimePoints = {}
-			end
-
-		elseif entity:getType() == 'minecraft:firework_rocket'
-		or entity:getType() == 'minecraft:fireball'
-		or entity:getType() == 'minecraft:wind_charge' then
-			data.excl = excl_explosive
-			data.affectedEntities = {}
-		end
-
-		return projectile
-	end
 
 	if spellName then self.spells[spellName] = spell
 	else table.insert(self.spells, spell)
@@ -391,10 +398,10 @@ function spellcore:newSpell(spellName, conditions, projectile_init, projectile_i
 	return spell
 end
 
-local NoSpell = {spellName = 'NoSpell'}
-NoSpell.__index = NoSpell
-function NoSpell:newProjectile(entity)
-	local projectile = setmetatable({__data = setmetatable({}, NoSpell)}, Projectile)
+local noSpell = {spellName = 'no_spell'}
+noSpell.__index = noSpell
+function noSpell:newProjectile(entity)
+	local projectile = setmetatable({__data = setmetatable({entity = entity}, noSpell)}, Projectile)
 	return projectile
 end
 
@@ -404,7 +411,7 @@ local function define_spell(projectileEntity)
 			return spell
 		end
 	end
-	return NoSpell
+	return noSpell
 end
 
 
@@ -470,7 +477,7 @@ useItemKey.press =
 
 local function update_projectile_data(projectile)
 	projectile.__data.justGotStuck = false
-	if not (projectile.__data.entity:isLoaded()--[[ or world.getEntity(UUID)]]) and projectile.__data.exists then                -- I should try with   not projectile.__data.entity:isLoaded()  and compare
+	if not projectile.__data.entity:isLoaded() and projectile.__data.exists then
 		if projectile.__data.isStuck then
 			projectile.__data.exists = false
 		elseif not projectile.__data.inEntity then
@@ -520,10 +527,12 @@ function events.TICK()
 
 	-- projectiles tick
 	for UUID, projectile in pairs(spellcore.projectiles) do
-		if projectile.__data.spellName ~= 'NoSpell' then
+		if projectile.__data.spellName ~= 'no_spell' then
 			update_projectile_data(projectile)
 			projectile_main(projectile, UUID)
 			if projectile.__data.tick then projectile.__data.tick(projectile) end
+		elseif not projectile.__data.entity:isLoaded() then
+			spellcore.projectiles[UUID] = nil
 		end
 	end
 
