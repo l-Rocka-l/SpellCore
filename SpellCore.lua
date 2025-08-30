@@ -52,10 +52,10 @@ local function expandZone(vec1, vec2, vecE)
 	return vec1, vec2
 end
 
----`func` will run every tick for `duration` timers
----@param duration integer -- in timers
----@param func function -- gets timer table as a parameter. for example: `timer.time_left = timer.time_left + 1` to control remaining time 
----@param name string|nil -- key of the timer. May be used to prevent duplicating timers
+---Creates a timer that runs a `func` every tick for the specified `duration`.
+---@param duration integer -- number of ticks the timer should run
+---@param func function -- function to execute every tick. Receives the timer `table` as a parameter. Use `timer.time_left` to check how many ticks remain.
+---@param name string|nil -- (optional) string key for the timer. Useful to prevent creating duplicate timers.
 function spellcore.setTimer(duration, func, name)
 	local tt = setmetatable({time_left = duration},{__call = func})
 	if name then
@@ -124,28 +124,38 @@ end
 local Projectile = {}
 Projectile.__index = Projectile
 
+-- Permanent info
+function Projectile:getSpellName()
+	return self.__data.spellName
+end
+
 function Projectile:getEntity()
 	return self.__data.entity
 end
 
-function Projectile:getLastPos()
-	return self.__data.lastPos or self.__data.entity:getPos()
+-- Status
+function Projectile:isNew()
+	return self.__data.isNew
 end
 
-function Projectile:justGotStuck()
-	return self.__data.justGotStuck
+function Projectile:isJustStuck()
+	return self.__data.isJustStuck
 end
 
-function Projectile:getStuck()
+function Projectile:isStuck()
 	return self.__data.isStuck
 end
 
-function Projectile:isHitEntity()
+function Projectile:hasHitEntity()
 	return self.__data.inEntity
 end
 
-function Projectile:isNew()
-	return self.__data.isNew
+-- Miscellaneous
+function Projectile:getLastPos(delta)
+	if delta and self.__data.lastPos then
+		return math.lerp(self.__data.entity:getPos(), self.__data.lastPos, delta)
+	end
+	return self.__data.lastPos or self.__data.entity:getPos(delta)
 end
 
 function Projectile:getHitEntity()
@@ -156,13 +166,10 @@ function Projectile:getAffectedEntities()
 	return self.__data.affectedEntities
 end
 
-function Projectile:getAffectedTimePoints()
-	return self.__data.affectedTimePoints
+function Projectile:getAffectedEntitiesTimes()
+	return self.__data.affectedEntitiesTimes
 end
 
-function Projectile:getSpellName()
-	return self.__data.spellName
-end
 
 local function double_inheritance(table, key)
 	if Projectile[key] then return Projectile[key]
@@ -200,7 +207,7 @@ local function projectile_else(data)
 	local hitBlockPos, block = getLastPos(data.entity)
 	if block.id ~= 'minecraft:air' then
 		data.lastPos = hitBlockPos
-		data.justGotStuck = true
+		data.isJustStuck = true
 		data.isStuck = true
 	else
 		data.exists = false
@@ -212,7 +219,7 @@ end
 
 local function excl_arrow(data)
 	if (not data.isStuck) and (data.entity:getNbt().inGround == 1) then
-		data.justGotStuck = true
+		data.isJustStuck = true
 		data.isStuck = true
 	end
 end
@@ -224,7 +231,7 @@ local function excl_trident(data) -- WIP
 
 	excl_arrow(data)
 
-	if not data.isStuck or data.justGotStuck then
+	if not data.isStuck or data.isJustStuck then
 		local hitEntity = nil
 		local vel = data.entity:getVelocity()
 		local pos = data.entity:getPos()
@@ -239,7 +246,7 @@ local function excl_trident(data) -- WIP
 		if hitEntity then
 			data.hitEntity = hitEntity
 			data.inEntity = true
-			data.justGotStuck = true
+			data.isJustStuck = true
 			data.isStuck = true
 		end
 	end
@@ -247,7 +254,7 @@ end
 
 local function excl_pierce(data)
 	excl_arrow(data)
-	if not data.isStuck or data.justGotStuck then
+	if not data.isStuck or data.isJustStuck then
 
 		local vel = data.entity:getVelocity()
 		local pos = data.entity:getPos()
@@ -256,13 +263,13 @@ local function excl_pierce(data)
 		for _, entity in ipairs(world.getEntities(pos1, pos2)) do
 			if entity:getNbt().HurtTime and ((entity:getNbt().HurtTime >= 9) or (entity:getNbt().DeathTime > 0)) then
 				data.affectedEntities[entity:getUUID()] = entity
-				data.affectedTimePoints[entity:getUUID()] = world.getTime()
+				data.affectedEntitiesTimes[entity:getUUID()] = world.getTime()
 			end
 		end
 	end
 end
 local function excl_explosive(data)
-	if data.justGotStuck then
+	if data.isJustStuck then
 		if data.entity:getType() == 'minecraft:wind_charge' then
 			data.affectedEntities = explosionAffected(data)
 		else
@@ -275,7 +282,7 @@ local function excl_explosive(data)
 	end
 end
 local function excl_splash(data)
-	if data.justGotStuck then
+	if data.isJustStuck then
 		data.affectedEntities = explosionAffected(data)
 	end
 end
@@ -291,13 +298,13 @@ local function changeToCloud(data)
     end
 end
 local function excl_lingering(data)
-	if data.justGotStuck then
+	if data.isJustStuck then
 		changeToCloud(projectile)
 	end
 	if data.isStuck then
 		for _, entity in ipairs(cloudAffected(projectile)) do
 			data.affectedEntities[entity:getUUID()] = entity
-			data.affectedTimePoints[entity:getUUID()] = world.getTime()
+			data.affectedEntitiesTimes[entity:getUUID()] = world.getTime()
 		end
 	end
 end
@@ -312,17 +319,24 @@ Spell.__index = Spell
 
 Spell.conditions = function () return false end
 
+Spell.__newindex = function (t, key, value)
+	if key == 'conditions' and type(value) == 'string' then
+		rawset(t, 'conditions', load('local entity = ... return '..value, 'conditions', 't'))
+	else rawset(t, key, value)
+	end
+end
+
 function Spell:newProjectile(entity)
 	local projectile = setmetatable({}, {__index = double_inheritance})
 	projectile.__data = {
 		entity = entity,
-		justGotStuck = false,
+		exists = true,
+		isNew = true,
+		isJustStuck = false,
 		isStuck = false,
 		inEntity = false,
-		isNew = true,
-		exists = true,
-		hitEntity = nil,
-		lastPos = nil
+		lastPos = nil,
+		hitEntity = nil
 	}
 	local data = setmetatable(projectile.__data, self)
 
@@ -336,7 +350,7 @@ function Spell:newProjectile(entity)
 		else
 			data.excl = excl_pierce
 			data.affectedEntities = {}
-			data.affectedTimePoints = {}
+			data.affectedEntitiesTimes = {}
 		end
 
 	elseif entity:getType() == 'minecraft:trident' then
@@ -351,7 +365,7 @@ function Spell:newProjectile(entity)
 		elseif id == 'minecraft:lingering_potion' then
 			data.excl = excl_lingering
 			data.affectedEntities = {}
-			data.affectedTimePoints = {}
+			data.affectedEntitiesTimes = {}
 		end
 
 	elseif entity:getType() == 'minecraft:firework_rocket'
@@ -365,34 +379,34 @@ function Spell:newProjectile(entity)
 end
 
 
-
 ---Create your own new spell!
----All functions have projectile object (`self`) as first argument
+---You can add functions after creating a spell. 
+---All functions have projectile object as first argument (if you create function like Spell:init() (but not Spell.init()) use `self` to access projectile)
 ---@param spellName string|nil Name your spell. For example "Lumus", "Zoltraak" or "EXPLOSION" or leave it empty, it doesn't really matter.
----@param conditions function|string|nil gets entity, which is projectile, as a parameter. Using "conditions", SpellCore determines which spell this projectile is. Have to return `true` or `false`(when function). Or if it is a string, it have to be the boolean, for example `'player:isCrouching() and (world.getMoonPhase() == 1)'`
----@param projectile_init function|nil Runs when projectile initializes
----@param projectile_in_air function|nil Runs every tick while projectile in midair
----@param projectile_stuck function|nil Runs every tick while projectile stuck in ground or runs once when hit the entity and disappeared. To run once use condition: self.justGotStuck
----@param projectile_disappeared function|nil Runs once projectile disappeared(no longer loaded), for example when picked up, went out of render distance, despawned, hit mob etc.
----@param render function|nil This function runs in events.RENDER. First arg is `projectile` object, second is `delta`.
----@param tick function|nil This function runs every TICK
+---@param conditions function|string|nil recieves entity, which is projectile, as a parameter. Using "conditions", SpellCore determines which spell this projectile is. Have to return `true` or `false`(when function). Or if it is a string, it have to be the boolean, for example `'player:isCrouching() and (world.getMoonPhase() == 1)'`
+---@param init function|nil Runs once projectile initializes
+---@param inAir function|nil Runs every tick while projectile in midair
+---@param stuck function|nil Runs every tick while projectile stuck in ground or runs once when hit the entity and disappeared. To run once check `projectile:isJustStuck()`
+---@param disappeared function|nil Runs once projectile disappeared(no longer loaded), for example when picked up, went out of render distance, despawned, hit mob etc.
+---@param tick function|nil This function runs every tick
+---@param render function|nil This function runs in events.RENDER. Arguments: `projectile`, `delta`, `context`, `matrix` (right from events.RENDER).
 ---@return table
-function spellcore:newSpell(spellName, conditions, projectile_init, projectile_in_air, projectile_stuck, projectile_disappeared, render, tick)
-	if type(conditions) == 'string' then conditions = load('local entity = ... return '..conditions) end
+function spellcore.newSpell(spellName, conditions, init, inAir, stuck, disappeared, render, tick)
+	if type(conditions) == 'string' then conditions = load('local entity = ... return '..conditions, 'conditions', 't') end
 	local spell = setmetatable({
 		spellName = spellName,
 		conditions = conditions,
-		projectile_init = projectile_init,
-		projectile_in_air = projectile_in_air,
-		projectile_stuck = projectile_stuck,
-		projectile_disappeared = projectile_disappeared,
-		render = render,
-		tick = tick
+		init = init,
+		inAir = inAir,
+		stuck = stuck,
+		disappeared = disappeared,
+		tick = tick,
+		render = render
 	}, Spell)
 	spell.__index = spell
 
-	if spellName then self.spells[spellName] = spell
-	else table.insert(self.spells, spell)
+	if spellName then spellcore.spells[spellName] = spell
+	else table.insert(spellcore.spells, spell)
 	end
 
 	return spell
@@ -423,7 +437,7 @@ local function detect_new_arrow(arrow)
 		local UUID = arrow:getUUID()
 		local distance = getDistance(player:getPos(), arrow:getPos())
 		if distance < 10 and arrow:getNbt().inGround == 0 then spellcore.projectiles[UUID] = define_spell(arrow):newProjectile(arrow)
-		else spellcore.projectiles[UUID] = NoSpell:newProjectile(arrow)
+		else spellcore.projectiles[UUID] = noSpell:newProjectile(arrow)
 		end
 	end
 end
@@ -476,7 +490,7 @@ useItemKey.press =
 ------------------------------ MAIN PROJECTILE FUNCTIONS ---------------------------------
 
 local function update_projectile_data(projectile)
-	projectile.__data.justGotStuck = false
+	projectile.__data.isJustStuck = false
 	if not projectile.__data.entity:isLoaded() and projectile.__data.exists then
 		if projectile.__data.isStuck then
 			projectile.__data.exists = false
@@ -484,7 +498,7 @@ local function update_projectile_data(projectile)
 			local hitEntity, hitPos = raycastEntity(projectile.__data)
 
 			if hitEntity then
-				projectile.__data.justGotStuck = true
+				projectile.__data.isJustStuck = true
 				projectile.__data.isStuck = true
 				projectile.__data.inEntity = true
 				projectile.__data.lastPos = hitPos
@@ -499,17 +513,15 @@ end
 
 local function projectile_main(projectile, UUID)
 	if projectile.__data.exists then
-		if projectile.__data.isNew then
-			projectile.__data.isNew = false
-			if projectile.__data.projectile_init then projectile.__data.projectile_init(projectile) end
-		end
-		if projectile.__data.isStuck then
-			if projectile.__data.projectile_stuck then projectile.__data.projectile_stuck(projectile) end
-		elseif projectile.__data.projectile_in_air then projectile.__data.projectile_in_air(projectile) end
+		if projectile.__data.isNew and projectile.__data.init then projectile.__data.init(projectile) end
+		if projectile.__data.isStuck and projectile.__data.stuck then projectile.__data.stuck(projectile)
+		elseif projectile.__data.inAir then projectile.__data.inAir(projectile) end
 	else
-		if projectile.__data.projectile_disappeared then projectile.__data.projectile_disappeared(projectile) end
+		if projectile.__data.disappeared then projectile.__data.disappeared(projectile) end
 		spellcore.projectiles[UUID] = nil
 	end
+	if projectile.__data.tick then projectile.__data.tick(projectile) end
+	projectile.__data.isNew = false
 end
 
 --------------------------------- TICK UPDATE -------------------------------------------
@@ -530,7 +542,6 @@ function events.TICK()
 		if projectile.__data.spellName ~= 'no_spell' then
 			update_projectile_data(projectile)
 			projectile_main(projectile, UUID)
-			if projectile.__data.tick then projectile.__data.tick(projectile) end
 		elseif not projectile.__data.entity:isLoaded() then
 			spellcore.projectiles[UUID] = nil
 		end
@@ -540,21 +551,21 @@ end
 
 ------------------------------- RENDER PROJECTILES ---------------------------------------
 
-function events.RENDER(delta)
+function events.RENDER(delta, context, matrix)
 	for _, projectile in pairs(spellcore.projectiles) do
-		if projectile.__data.render then projectile.__data.render(projectile, delta) end
+		if projectile.__data.render then projectile.__data.render(projectile, delta, context, matrix) end
 	end
 end
 
 ------------------------------- SOME FUNCTIONS YOU MIGHT NEED ----------------------------
----@return table spellcore.spells A table that contains all the spells. You might need it, so here it is.
-function spellcore:getSpells()
-	return self.spells
+---@return table spellcore.spells A table of all currently registered spells. Keys are spell names (or sequence numbers if no name was given). Values are the corresponding `Spell` objects.
+function spellcore.getSpells()
+	return spellcore.spells
 end
 
----@return table spellcore.projectiles A table that contains all the projectiles' objects. Projectiles are values, their entity UUIDs are keys.
-function spellcore:getProjectiles()
-	return self.projectiles
+---@return table spellcore.projectiles A table of all active projectiles. Keys are projectile entity UUIDs. Values are the corresponding `Projectile` objects..
+function spellcore.getProjectiles()
+	return spellcore.projectiles
 end
 
 
