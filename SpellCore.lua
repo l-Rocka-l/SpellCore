@@ -222,7 +222,7 @@ end
 ---@return any
 local function double_inheritance(table, key)
 	if Projectile[key] then return Projectile[key]
-	elseif table.__data.entity[key] then return function () return table.__data.entity[key](table.__data.entity) end
+	elseif table.__data.entity[key] then return function (_, ...) return table.__data.entity[key](table.__data.entity, ...) end
 	else return nil
 	end
 end
@@ -670,4 +670,5 @@ function spellcore.getProjectiles()
 end
 
 return spellcore
+
 -- made by l_Rocka_l
