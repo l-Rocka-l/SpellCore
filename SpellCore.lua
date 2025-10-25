@@ -1,6 +1,23 @@
+-- SpellCore by l_Rocka_l (discord: l_rocka_l)
+
+-- Also visit wiki https://github.com/l-Rocka-l/SpellCore/wiki
+
 ---@diagnostic disable: undefined-global, undefined-doc-name, undefined-field
 ---@class SpellCore
 local spellcore = {}
+
+-- check version --
+local function check_version()
+	local _, _, major, minor, patch = string.find(client:getFiguraVersion(), "(%d)%p(%d)%p(%d)")
+	if tonumber(minor) < 1 then
+		return false
+	elseif tonumber(patch) < 5 then
+		return false
+	end
+	return true
+end
+
+assert(check_version(), '\n \n SpellCore requires Figura v0.1.5+.\n Your version: '..client:getFiguraVersion()..'\n Update required. \n')
 
 spellcore.projectiles = {} -- Contains all projectiles
 local playerUUID = {}
@@ -13,14 +30,6 @@ explosionsRadius['minecraft:wind_charge'] = vec(2.6,2.6,2.6)
 explosionsRadius['minecraft:firework_rocket'] = vec(5,5,5) -- wind_charge mb not 2.6 but 1.3, firework mb not 5 but 2.5
 
 ---------------------- HELPFUL FUNCTIONS ----------------------------------------------------------------------------------
-
----Calculates the distance between two positions
----@param pos1 Vector3
----@param pos2 Vector3
----@return number
-local function getDistance(pos1, pos2)
-	return pos1:sub(pos2):length()
-end
 
 ---Converts a UUID string into a table of 4 decimal numbers for comparison
 ---@param UUID string
@@ -522,64 +531,22 @@ end
 
 ------------------------------ DETECT NEW PROJECTILES FUNCTIONS -------------------------
 
----Detects new arrows and adds them to the projectiles table
----@param arrow EntityAPI
-local function detect_new_arrow(arrow)
-	local UUID = arrow:getUUID()
-	if spellcore.projectiles[UUID] == nil and arrow:isLoaded() and player:isLoaded() then
-		local UUID = arrow:getUUID()
-		local distance = getDistance(player:getPos(), arrow:getPos())
-		if distance < 10 and arrow:getNbt().inGround == 0 then spellcore.projectiles[UUID] = define_spell(arrow):newProjectile(arrow)
-		else spellcore.projectiles[UUID] = noSpell:newProjectile(arrow)
-		end
-	end
-end
-
 ---Detects new projectiles and adds them to the projectiles table
 local function detect_new_projectile()
-	local playerPos = player:getPos():add(0, player:getEyeHeight(), 0)
-	local pos1 = playerPos:copy():sub(3, 3, 3)
-	local pos2 = playerPos:copy():add(3, 3, 3)
-
+	local playerPos = player:getPos():add(0, 1.8, 0)
+	local pos1 = playerPos - 6
+	local pos2 = playerPos + 6
 	local entities = world.getEntities(pos1, pos2)
 
 	for _, entity in pairs(entities) do
-		if entity:getNbt().HasBeenShot and compareOwnerUUID(entity:getNbt().Owner) then
+		if entity:getNbt().HasBeenShot then
 			local UUID = entity:getUUID()
-			if spellcore.projectiles[UUID] == nil then
+			if (spellcore.projectiles[UUID] == nil) and compareOwnerUUID(entity:getNbt().Owner) then
 				spellcore.projectiles[UUID] = define_spell(entity):newProjectile(entity)
 			end
 		end
 	end
 end
-
-------------------------------- DETECT NEW PROJECTILES ----------------------------------
--- detect arrow and trident --
-function events.ARROW_RENDER(_, arrow)
-	detect_new_arrow(arrow)
-end
-
-function events.TRIDENT_RENDER(_, trident)
-	detect_new_arrow(trident)
-end
-
--- detect projectile --
-local useItemKey = keybinds:fromVanilla("key.use")
-
----Ping function for use item key press detection
-function pings.useItemKeyPressed()
-	spellcore.setTimer(2, function(timer)
-			if useItemKey:isPressed() then
-				timer.time_left = 1
-			end
-			detect_new_projectile()
-		end, 'pressed')
-end
-
-useItemKey.press =
-	function()
-		pings.useItemKeyPressed()
-	end
 
 ------------------------------ MAIN PROJECTILE FUNCTIONS ---------------------------------
 
@@ -635,6 +602,8 @@ function events.TICK()
 			func()
 		end
 	end
+
+	detect_new_projectile()
 
 	-- projectiles tick
 	for UUID, projectile in pairs(spellcore.projectiles) do
