@@ -35,5 +35,4 @@ Thanks to the **Figura Discord** community for their helpful Q&A.
 Feel free to submit issues and feature requests! You can also DM me on Discord: l_rocka_l
 
 ---
-
-Made by l_Rocka_l
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/l-Rocka-l/SpellCore/total)
