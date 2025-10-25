@@ -1,3 +1,7 @@
+-- SpellCore by l_Rocka_l (discord: l_rocka_l)
+
+-- Also visit wiki https://github.com/l-Rocka-l/SpellCore/wiki
+
 ---@diagnostic disable: undefined-global, undefined-doc-name, undefined-field
 ---@class SpellCore
 local spellcore = {}
@@ -18,7 +22,6 @@ assert(check_version(), '\n \n SpellCore requires Figura v0.1.5+.\n Your version
 spellcore.projectiles = {} -- Contains all projectiles
 local playerUUID = {}
 local timers = {}
-local playerReachDistance = 6
 
 local explosionsRadius = {} -- DB
 explosionsRadius['minecraft:potion'] = vec(4.125,2.125,4.125)
@@ -39,11 +42,6 @@ local function convert_UUID(UUID)
 	UUIDtable[4] = (tonumber(UUID:sub(29,36),16)+2^31)%2^32-2^31
 	return(UUIDtable)
 end
-
-function pings.setReachDistance(v)
-	playerReachDistance = math.max(v, 6)
-end
-pings.setReachDistance(host:getReachDistance())
 
 ---Initializes player UUID on entity initialization
 function events.ENTITY_INIT()
@@ -536,8 +534,8 @@ end
 ---Detects new projectiles and adds them to the projectiles table
 local function detect_new_projectile()
 	local playerPos = player:getPos():add(0, 1.8, 0)
-	local pos1 = playerPos - playerReachDistance
-	local pos2 = playerPos + playerReachDistance
+	local pos1 = playerPos - 6
+	local pos2 = playerPos + 6
 	local entities = world.getEntities(pos1, pos2)
 
 	for _, entity in pairs(entities) do
