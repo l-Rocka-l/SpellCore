@@ -518,11 +518,18 @@ function noSpell:newProjectile(entity)
 end
 
 ---Determines which spell applies to a given projectile entity
----@param projectileEntity EntityAPI
+---@param entity EntityAPI
 ---@return table
-local function define_spell(projectileEntity)
+local function define_spell(entity)
+	local inGround = entity:getNbt().inGround
+	if inGround then
+		local vel = entity:getVelocity()
+		if inGround == 1 and vel.x + vel.y + vel.z == 0 then
+			return noSpell
+		end
+	end
 	for _, spell in pairs(spellcore.spells) do
-		if spell.conditions(projectileEntity) then
+		if spell.conditions(entity) then
 			return spell
 		end
 	end
@@ -595,7 +602,7 @@ end
 function events.TICK()
 	-- timer update
 	for key, func in pairs(timers) do
-		if func.time_left == 0 then
+		if func.time_left <= 0 then
 			timers[key] = nil
 		else
 			func.time_left = func.time_left - 1
